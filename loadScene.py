@@ -1,4 +1,5 @@
 import bpy
+import bpy_extras
 import os
 import sys
 import glob
@@ -8,6 +9,7 @@ import time
 import queue
 import shutil
 import subprocess
+import numpy as np
 
 dir = "/media/MX500/CS_BA_Data"
 if not dir in sys.path:
@@ -24,8 +26,13 @@ from loadPBR import *
 
 
 class Obj_loader:
+    #bpy.context.scene.render.engine = 'CYCLES' #later
+    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+    bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+    bpy.context.scene.render.image_settings.use_zbuffer = True
+        
     compositor_exists = False
-    n = 10 # will load n random objects
+    n = 5 # will load n random objects
     square_root = math.ceil(math.sqrt(n))
     square = square_root**2 # next larger square number
     num_loaded_obj = 0
@@ -62,9 +69,10 @@ class Obj_loader:
     print(pbr)
     
     def __load_or_reuse(self, img_path):
-        img_name = bpy.path.display_name_from_filepath(img_path)
+        img_name = bpy.path.basename(img_path)
         img = bpy.data.images.get(img_name)
         if img == None:
+            print("creating", img_name)
             img = bpy.data.images.load(img_path)
         return img
     
@@ -85,7 +93,6 @@ class Obj_loader:
             bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
                 
             for ob in bpy.context.selected_objects:
-                #print("ob:",obj_name)
                 col.objects.link(ob)
             
                 # Add texture
@@ -173,39 +180,150 @@ class Obj_loader:
             bpy.context.scene.node_tree.nodes.remove(node)
             
         renderNode = scene.node_tree.nodes.new('CompositorNodeRLayers')
-        normalizeNode = scene.node_tree.nodes.new('CompositorNodeNormalize')
         compositeNode = scene.node_tree.nodes.new('CompositorNodeComposite')
-        OutputNode = scene.node_tree.nodes.new('CompositorNodeOutputFile')
-        scene.node_tree.links.new(normalizeNode.inputs['Value'], renderNode.outputs['Depth'])
-        scene.node_tree.links.new(compositeNode.inputs['Image'], normalizeNode.outputs['Value'])
+        scene.node_tree.links.new(compositeNode.inputs['Image'], renderNode.outputs['Image'])
+        scene.node_tree.links.new(compositeNode.inputs['Z'], renderNode.outputs['Depth'])
         scene.node_tree.links.new(compositeNode.inputs['Alpha'], renderNode.outputs['Alpha'])
         self.compositor_exists = True
+
+    #def __get_bounding_box(obj):
+        
+    def __clamp(self, x, minimum, maximum):
+        return max(minimum, min(x, maximum))
+
+    def __camera_view_bounds_2d(self, me_ob):
+        """
+        Returns camera space bounding box of mesh object.
+
+        Negative 'z' value means the point is behind the camera.
+
+        Takes shift-x/y, lens angle and sensor size into account
+        as well as perspective/ortho projections.
+
+        :arg scene: Scene to use for frame size.
+        :type scene: :class:`bpy.types.Scene`
+        :arg obj: Camera object.
+        :type obj: :class:`bpy.types.Object`
+        :arg me: Untransformed Mesh.
+        :type me: :class:`bpy.types.Mesh´
+        :return: a Box object (call its to_tuple() method to get x, y, width and height)
+        :rtype: :class:`Box`
+        """
+        scene = bpy.context.scene
+        cam_ob = scene.camera
+
+        mat = cam_ob.matrix_world.normalized().inverted()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        mesh_eval = me_ob.evaluated_get(depsgraph)
+        me = mesh_eval.to_mesh()
+        me.transform(me_ob.matrix_world)
+        me.transform(mat)
+
+        camera = cam_ob.data
+        frame = [-v for v in camera.view_frame(scene=scene)[:3]]
+        camera_persp = camera.type != 'ORTHO'
+
+        lx = []
+        ly = []
+
+        for v in me.vertices:
+            co_local = v.co
+            z = -co_local.z
+
+            if camera_persp:
+                if z == 0.0:
+                    lx.append(0.5)
+                    ly.append(0.5)
+                # Does it make any sense to drop these?
+                # if z <= 0.0:
+                #    continue
+                else:
+                    frame = [(v / (v.z / z)) for v in frame]
+
+            min_x, max_x = frame[1].x, frame[2].x
+            min_y, max_y = frame[0].y, frame[1].y
+
+            x = (co_local.x - min_x) / (max_x - min_x)
+            y = (co_local.y - min_y) / (max_y - min_y)
+
+            lx.append(x)
+            ly.append(y)
+
+        min_x = self.__clamp(min(lx), 0.0, 1.0)
+        max_x = self.__clamp(max(lx), 0.0, 1.0)
+        min_y = self.__clamp(min(ly), 0.0, 1.0)
+        max_y = self.__clamp(max(ly), 0.0, 1.0)
+
+        mesh_eval.to_mesh_clear()
+
+        r = scene.render
+        fac = r.resolution_percentage * 0.01
+        dim_x = r.resolution_x * fac
+        dim_y = r.resolution_y * fac
+
+        # Sanity check
+        if round((max_x - min_x) * dim_x) == 0 or round((max_y - min_y) * dim_y) == 0:
+            return (0, 0, 0, 0)
+
+        return (
+            round(min_x * dim_x),            # X
+            round(dim_y - max_y * dim_y),    # Y
+            round((max_x - min_x) * dim_x),  # Width
+            round((max_y - min_y) * dim_y)   # Height
+        )
+
+    # Print the result
+    #print(camera_view_bounds_2d(context.scene, context.scene.camera, context.object))      
+        
         
     def iterate_diff(self):
-        if os.path.isdir(self.render_path):
-            shutil.rmtree(self.render_path)
-        os.mkdir(self.render_path)
+        for f in glob.glob(os.path.join(self.render_path, "*.*")):
+            os.remove(f)
+        f = open(os.path.join(self.render_path, "labels.txt"), "w")
 
-        # TODO: iterate self.annotations
         col = bpy.data.collections.get(self.collection_name).objects
-        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".png")
+        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".exr")
         bpy.ops.render.render(write_still = True)
-        print(len(col))
+        #bpy.ops.render.render()
+
         keys = self.annotations.keys()
         for i, key in enumerate(keys):
+            f.write(bpy.path.basename(key))
             objects = self.annotations[key]
             print("iterate diff: ", key, objects)
             positions = queue.Queue()
             for obj in objects:
+                bb = self.__camera_view_bounds_2d(obj) # (x,y,width,height)
+                f.write(" " + str(bb[0]) + "," + str(bb[1]) + "," + str(bb[2]) + "," + str(bb[3]))
                 positions.put(obj.location.copy())
                 obj.location = (100,100,100)
-            bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".png")
+            bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".exr")
             bpy.ops.render.render(write_still = True)
+            #bpy.ops.render.render()
+
             for obj in objects:
                 obj.location = positions.get()
+            f.write("\n")
+        f.close()
+
+        # Now create an img with just background things
+        print("self.annotations: ", self.annotations.values())
+        positions = queue.Queue()
+        objects = self.annotations.values()
+        flatten_objects = [item for sublist in objects for item in sublist]
+        print(objects)
+        print(flatten_objects)
+        for obj in flatten_objects:
+            positions.put(obj.location.copy())
+            obj.location = (100,100,100)
+        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_empty" + ".exr")
+        bpy.ops.render.render(write_still = True)
+        for obj in flatten_objects:
+            obj.location = positions.get()
+
                 
     def create_labels(self):
-        # I'm too lazy to get PIL running inside of Blender
+        # I'm too lazy to get PIL/exr running inside of Blender
         subprocess.run(['python3', '/media/MX500/CS_BA_Data/label.py'])
 
 loader = Obj_loader()
@@ -216,4 +334,11 @@ loader.set_camera() # only creates one camera (by all means)
 loader.load_background() # only creates one bg (per bg image)
 loader.create_or_reuse_compositor()
 loader.iterate_diff()
-loader.create_labels()
+#loader.clean()
+#loader.create_labels()
+
+# mask R - CNN
+# Segmantic segmentation
+# Wednesday
+
+# notes: don't rotate camera - might break bounding boxes of objects (they don't adjust to camera). Instead rotate everything else
