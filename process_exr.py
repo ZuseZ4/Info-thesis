@@ -7,6 +7,7 @@ import sys
 import Imath
 import pylab # for colors
 from PIL import Image as im
+from PIL import ImageDraw
 #from os import Path
 
 def read_exr_channel(filepath: os.path, channel):
@@ -116,10 +117,27 @@ def create_labels(base_path, label_path):
     print(scene_colors)
     get_merged_label_img(scene_depth_images, scene_colors, merge_label_path)
 
+def draw_bb(base_path, label_path):
+    img_path = os.path.join(base_path, "label.png")
+    img = im.open(img_path)
+    draw = ImageDraw.Draw(img)
+    f = open(label_path)
+    lines = f.readlines()
+    coordinates = []
+    for line in lines:
+        entries = line.split()
+        for i, entry in enumerate(entries):
+            if i == 0:
+                continue
+            coordinates.append( entry.split(",") )
+    for c in coordinates:
+        (x,y,w,h) = (int(c[0]), int(c[1]), int(c[2]), int(c[3]))
+        draw.rectangle([(x,y),(x+w,y+h)], outline=(0,0,0))
+    img.save(os.path.join(base_path, "labels_w_box.png"))
+
+
 base_path = "/media/MX500/CS_BA_Data/render_output"
 label_path = os.path.join(base_path, "labels.txt")
 
-create_labels(base_path, label_path)
-
-
-
+#create_labels(base_path, label_path)
+draw_bb(base_path, label_path)
