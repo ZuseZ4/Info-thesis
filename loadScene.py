@@ -10,6 +10,7 @@ import queue
 import shutil
 import subprocess
 import numpy as np
+import time
 
 dir = "/media/MX500/CS_BA_Data"
 if not dir in sys.path:
@@ -32,7 +33,7 @@ class Obj_loader:
     bpy.context.scene.render.image_settings.use_zbuffer = True
         
     compositor_exists = False
-    n = 5 # will load n random objects
+    n = 10 # will load n random objects
     square_root = math.ceil(math.sqrt(n))
     square = square_root**2 # next larger square number
     num_loaded_obj = 0
@@ -56,6 +57,7 @@ class Obj_loader:
     assert os.path.isdir(texture_dir)
     assert os.path.isdir(model_dir)
     assert os.path.isdir(background_dir)
+    assert os.path.isdir(render_path)
     
     pbr_parent_dir = os.path.join(base_dir, "SamplePBR")
     num_PBR = len(list(os.walk(pbr_parent_dir)))
@@ -68,6 +70,11 @@ class Obj_loader:
     pbr = pbr_loader(base_dir)
     print(pbr)
     
+    def iteration(self, n):
+        self.render_path = os.path.join(self.base_dir, "render_output", str(n))
+        if not os.path.isdir(self.render_path):
+            os.mkdir(self.render_path)
+    
     def __load_or_reuse(self, img_path):
         img_name = bpy.path.basename(img_path)
         img = bpy.data.images.get(img_name)
@@ -78,7 +85,6 @@ class Obj_loader:
     
     def load_obj(self):
         obj_list = random.choices(self.model_files, k=self.n)
-        print("samples", obj_list)
         
         col = bpy.data.collections.get(self.collection_name)
         if col == None:
@@ -87,7 +93,6 @@ class Obj_loader:
               
         while(self.num_loaded_obj < self.n):
             obj_path = obj_list[self.num_loaded_obj]
-            print(obj_path)
             obj_name = bpy.path.display_name_from_filepath(obj_path)
             bpy.ops.import_scene.obj(filepath=obj_path)
             bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
@@ -156,14 +161,20 @@ class Obj_loader:
         cam.rotation_euler = [0,0,0]
         
     def clean(self):
+        if bpy.data.collections.get(self.collection_name) == None:
+            return # we haven't run load_obj() yet
+        col = bpy.data.collections.get(self.collection_name)    
+        obj = col.objects
+        while obj:
+            bpy.data.objects.remove(obj[0], do_unlink=True)
+        bpy.data.collections.remove(col)
+        
+        self.annotations = {}
+        self.num_loaded_obj = 0
+        
         bpy.data.meshes.data.orphans_purge() # delte unused meshes (they accumulate)
         bpy.data.materials.data.orphans_purge() # delte unused materials (they accumulate)
         bpy.data.images.data.orphans_purge()
-        if bpy.data.collections.get(self.collection_name) == None:
-            return # we haven't run load_obj() yet
-        obj = bpy.data.collections.get(self.collection_name).objects
-        while obj:
-            bpy.data.objects.remove(obj[0], do_unlink=True)
     
     def create_or_reuse_compositor(self):
         # check if nodes exist, don't create multiples
@@ -172,7 +183,6 @@ class Obj_loader:
         else:
             print("creating compositor")
         scene = bpy.context.scene
-        print("scene", scene)
         scene.render.use_compositing = True
         scene.use_nodes = True
         nodes = bpy.context.scene.node_tree.nodes.values() # from last iteration, remvoe
@@ -277,68 +287,100 @@ class Obj_loader:
         
         
     def iterate_diff(self):
+    
+        if bpy.data.collections.get(self.collection_name) == None:
+            return # we haven't run load_obj() yet
+        col = bpy.data.collections.get(self.collection_name)    
+
+        
         for f in glob.glob(os.path.join(self.render_path, "*.*")):
             os.remove(f)
         f = open(os.path.join(self.render_path, "labels.txt"), "w")
 
-        col = bpy.data.collections.get(self.collection_name).objects
+        print("samples: ", bpy.context.scene.eevee.taa_samples)
+        bpy.context.scene.eevee.taa_samples = 16
+        bpy.context.scene.render.image_settings.file_format = 'PNG'
+        bpy.context.scene.render.image_settings.use_zbuffer = False
+        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".png")
+        bpy.ops.render.render(write_still = True)
+        bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+        bpy.context.scene.render.image_settings.use_zbuffer = True
         bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".exr")
         bpy.ops.render.render(write_still = True)
-        #bpy.ops.render.render()
+        # the next one could improve perf, but has no effect
+        #bpy.context.scene.eevee.taa_samples = 1 # depth information are exact after the first run
 
         keys = self.annotations.keys()
+        positions = queue.Queue()
         for i, key in enumerate(keys):
-            f.write(bpy.path.basename(key))
             objects = self.annotations[key]
-            print("iterate diff: ", key, objects)
-            positions = queue.Queue()
             for obj in objects:
-                bb = self.__camera_view_bounds_2d(obj) # (x,y,width,height)
-                f.write(" " + str(bb[0]) + "," + str(bb[1]) + "," + str(bb[2]) + "," + str(bb[3]))
                 positions.put(obj.location.copy())
                 obj.location = (100,100,100)
-            bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".exr")
-            bpy.ops.render.render(write_still = True)
-            #bpy.ops.render.render()
-
+                
+        # render empty
+        #bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+        #bpy.context.scene.render.image_settings.use_zbuffer = True
+        #bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_empty.exr")
+        #bpy.ops.render.render(write_still = True)
+                
+        for i, key in enumerate(keys):
+            f.write(bpy.path.basename(key))
+            objects = self.annotations[key]                
             for obj in objects:
                 obj.location = positions.get()
+                bb = self.__camera_view_bounds_2d(obj) # (x,y,width,height)
+                f.write(" " + str(bb[0]) + "," + str(bb[1]) + "," + str(bb[2]) + "," + str(bb[3]))            
+                
+            #bpy.context.scene.render.image_settings.file_format = 'PNG'
+            #bpy.context.scene.render.image_settings.use_zbuffer = False
+            #bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".png")
+            #bpy.ops.render.render(write_still = True)
+            bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+            bpy.context.scene.render.image_settings.use_zbuffer = True
+            bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".exr")
+            bpy.ops.render.render(write_still = True)
+                    
+            for obj in objects: # simply remove obj instead of hiding them again
+                bpy.data.objects.remove(obj, do_unlink=True)
             f.write("\n")
         f.close()
-
-        # Now create an img with just background things
-        print("self.annotations: ", self.annotations.values())
-        positions = queue.Queue()
-        objects = self.annotations.values()
-        flatten_objects = [item for sublist in objects for item in sublist]
-        print(objects)
-        print(flatten_objects)
-        for obj in flatten_objects:
-            positions.put(obj.location.copy())
-            obj.location = (100,100,100)
-        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_empty" + ".exr")
-        bpy.ops.render.render(write_still = True)
-        for obj in flatten_objects:
-            obj.location = positions.get()
+        
 
                 
     def create_labels(self):
         # I'm too lazy to get PIL/exr running inside of Blender
         subprocess.run(['python3', '/media/MX500/CS_BA_Data/label.py'])
 
+
+
+
 loader = Obj_loader()
+
+startTime = time.time()
+for i in range(200, 210):
+    print("annotations ", loader.annotations)
+    loader.set_camera() # only creates one camera (by all means)
+    loader.iteration(i)
+    loader.load_floor()
+    loader.load_obj() # creates multiple textures and materials
+    loader.load_background() # only creates one bg (per bg image)
+    loader.create_or_reuse_compositor()
+    loader.iterate_diff()
+    loader.clean()
 loader.clean()
-loader.load_floor()
-loader.load_obj() # creates multiple textures and materials
-loader.set_camera() # only creates one camera (by all means)
-loader.load_background() # only creates one bg (per bg image)
-loader.create_or_reuse_compositor()
-loader.iterate_diff()
-#loader.clean()
 #loader.create_labels()
+
+
+executionTime = (time.time() - startTime)
+print('Execution time in seconds: ' + str(executionTime))
+
 
 # mask R - CNN
 # Segmantic segmentation
 # Wednesday
+
+# 730 seconds for 100 folders / scenes (without generating labels)
+# 2900 s for 800 folders.
 
 # notes: don't rotate camera - might break bounding boxes of objects (they don't adjust to camera). Instead rotate everything else
