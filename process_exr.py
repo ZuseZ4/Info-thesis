@@ -52,6 +52,11 @@ def generate_masks(render_path, mask_path):
 
     scene_folders = [f.path for f in os.scandir(render_path) if f.is_dir()]
     for scene_dir in scene_folders:
+
+        label_path = os.path.join(scene_dir, "labels.txt")
+        f = open(label_path)
+        lines = f.readlines()
+
         print(scene_dir)
         folder_num = os.path.basename(scene_dir)
         mask_dir = os.path.join(mask_path, folder_num)
@@ -61,9 +66,11 @@ def generate_masks(render_path, mask_path):
         i = 0
         bg_init = False
         bg = None
+        # damn, still not done. Overlapping single masks could exist
+        # We need to make sure to only add the front obj to the bitmask
         while os.path.isfile(os.path.join(scene_dir, "render_img"+str(i)+".exr")):
             img_path = os.path.join(scene_dir, "render_img"+str(i)+".exr")
-            out_path = os.path.join(mask_path, folder_num, str(i) + ".png")
+            out_path = os.path.join(mask_path, folder_num, lines[i].split()[0] + ".png")
             img_depth = read_exr_channel(img_path, 'Z')
             diff = base_depth - img_depth
             store_array_as_img(diff, out_path, False)
