@@ -10,7 +10,6 @@ from pathlib import Path
 import pylab # for colors
 from PIL import Image as im
 from PIL import ImageDraw
-#from os import Path
 
 def read_exr_channel(filepath: os.path, channel):
     exrfile = exr.InputFile(filepath)
@@ -49,8 +48,7 @@ def get_labels_color_map(labels):
 def generate_masks(render_path, mask_path):
     base_img = os.path.join(render_path, "render_empty.exr")
     base_depth = read_exr_channel(base_img, 'Z')
-
-
+    
     scene_folders = [f.path for f in os.scandir(render_path) if f.is_dir()]
     for scene_dir in scene_folders:
 
@@ -69,9 +67,12 @@ def generate_masks(render_path, mask_path):
         bg = None
         # damn, still not done. Overlapping single masks could exist
         # We need to make sure to only add the front obj to the bitmask
-        while os.path.isfile(os.path.join(scene_dir, "render_img"+str(i)+".exr")):
-            img_path = os.path.join(scene_dir, "render_img"+str(i)+".exr")
-            out_path = os.path.join(mask_path, folder_num, lines[i].split()[0] + ".png")
+        print("isfile", os.path.join(scene_dir, "render_img_"+str(i)+".exr"), os.path.isfile(os.path.join(scene_dir, "render_img_"+str(i)+".exr")))
+        while os.path.isfile(os.path.join(scene_dir, "render_img_"+str(i)+".exr")):
+            img_path = os.path.join(scene_dir, "render_img_"+str(i)+".exr")
+            if not os.path.isfile(img_path):
+                sys.exit(42)
+            out_path = os.path.join(mask_dir, lines[i].split()[0] + ".png")
             img_depth = read_exr_channel(img_path, 'Z')
             diff = base_depth - img_depth
             store_array_as_img(diff, out_path, False)
@@ -81,6 +82,7 @@ def generate_masks(render_path, mask_path):
             else:
                 bg += diff
             i += 1
+        print(type(bg))
         store_array_as_img(bg, os.path.join(mask_path, folder_num, "bg.png"), True)
 
 def draw_bb(base_path, label_path):
@@ -123,6 +125,6 @@ input_img_dir = os.path.join(base_path, "training")
 sample_path = os.path.join(base_path, "SamplePBR")
 mask_path   = os.path.join(base_path, "masks")
 
+generate_masks(render_path, input_img_dir)
 copy_input_images(render_path, input_img_dir)
-#generate_masks(render_path, mask_path)
 #draw_bb(render_path, label_path)

@@ -48,15 +48,13 @@ class SegDataset(Dataset):
         for class_name in self.classes:
             mask_path = os.path.join(self.trainingDirs[index], class_name)
             if not os.path.isfile(mask_path):
-                #yimg = Image.new('L', size=(384,288))
                 yimg = Image.new('L', size=(1920,1080))
-                print("not found", mask_path)
+                #print("not found", mask_path)
             else:
                 yimg = Image.open(mask_path).convert('L')
 
             y1 = trftensor(trfresize(yimg))
             y1 = y1.type(torch.BoolTensor)
-            print("shape", yimg.size)
             masks.append(y1)
 
         y = torch.cat(masks, dim=0)
@@ -113,12 +111,11 @@ def pixelAcc(target, predicted):
     pixelAccuracy = accsum/target.shape[0]        
     return pixelAccuracy
 
-def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loader, val_loader, train_len, val_len, lastCkptPath = None):
+def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loader, val_loader, lastCkptPath = None):
     if torch.cuda.is_available():  
         dev = "cuda:0" 
     else:  
         dev = "cpu"
-    dev = "cpu"
     device = torch.device(dev)
     
     tr_loss_arr = []
@@ -151,8 +148,8 @@ def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loade
         pixelacc = 0
         meaniou = 0
         
-        #pbar = tqdm(train_loader, total = len(train_loader))
-        pbar = tqdm(train_loader, total = train_len)
+        pbar = tqdm(train_loader, total = len(train_loader))
+        #pbar = tqdm(train_loader, total = train_len)
         for X, y in pbar:
             torch.cuda.empty_cache()
             model.train()
@@ -177,8 +174,8 @@ def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loade
         with torch.no_grad():
             
             val_loss = 0
-            #pbar = tqdm(val_loader, total = len(val_loader))
-            pbar = tqdm(val_loader, total = val_len)
+            pbar = tqdm(val_loader, total = len(val_loader))
+            #pbar = tqdm(val_loader, total = val_len)
             for X, y in pbar:
                 torch.cuda.empty_cache()
                 X = X.to(device).float()
@@ -221,19 +218,15 @@ print(megaDataset)
 
 #TTR is Train Test Ratio
 def trainTestSplit(dataset, TTR):
-    trainLen = int(TTR * len(dataset))
-    trainDataset = torch.utils.data.Subset(dataset, range(0, trainLen))
-    valLen = len(dataset) - trainLen + 1
-    valDataset = torch.utils.data.Subset(dataset, range(trainLen, len(dataset)))
-    return trainDataset, trainLen, valDataset, valLen
+    trainDataset = torch.utils.data.Subset(dataset, range(0, int(TTR * len(dataset))))
+    valDataset = torch.utils.data.Subset(dataset, range(int(TTR*len(dataset)), len(dataset)))
+    return trainDataset, valDataset
   
 batchSize = 2
-trainDataset, trainLen, valDataset, valLen = trainTestSplit(megaDataset, 0.9)
+trainDataset, valDataset = trainTestSplit(megaDataset, 0.9)
+print("dataset lengths", len(trainDataset), len(valDataset))
 trainLoader = DataLoader(trainDataset, batch_size = batchSize, shuffle=True, drop_last=True)
-#trainLoader = DataLoader(trainDataset, batch_size = batchSize, shuffle=True, drop_last=True, random_arg=False)
-print("val type", type(valDataset), " len ", valLen)
 valLoader = DataLoader(valDataset, batch_size = batchSize, shuffle=True, drop_last=True)
-print("trainLoader type", type(trainLoader))
 
 model = MatSegModel()
 optimizer = optim.Adam(model.parameters(), lr=0.00005)
@@ -248,6 +241,4 @@ retval = training_loop(3,
                        loss_fn, 
                        trainLoader, 
                        valLoader, 
-                       trainLen,
-                       valLen,
                        None)
