@@ -2,6 +2,7 @@ import OpenEXR as exr
 import numpy
 import numpy as np
 import os
+import shutil
 import glob
 import sys
 import Imath
@@ -100,6 +101,20 @@ def draw_bb(base_path, label_path):
         draw.rectangle([(x,y),(x+w,y+h)], outline=(0,0,0))
     img.save(os.path.join(base_path, "labels_w_box.png"))
 
+def copy_input_images(render_path, input_img_dir):
+    folder_searchpath = os.path.join(render_path, "*")
+    render_folders = glob.glob(folder_searchpath)
+    for folder in render_folders:
+        if not os.path.isdir(folder):
+            continue
+        folder_num = os.path.basename(folder)
+        input_img_path = os.path.join(render_path, str(folder_num), "render_full.png")
+        output_img_path = os.path.join(input_img_dir, str(folder_num) + ".png")
+        if os.path.isfile(input_img_path):
+            shutil.copyfile(input_img_path, output_img_path)
+        else:
+            print("skipping ", folder_num, " ", input_img_path)
+
 
 base_path   = "/media/MX500/CS_BA_Data"
 render_path = os.path.join(base_path, "render_output")
@@ -108,5 +123,6 @@ input_img_dir = os.path.join(base_path, "input_images")
 sample_path = os.path.join(base_path, "SamplePBR")
 mask_path   = os.path.join(base_path, "masks")
 
-generate_masks(render_path, mask_path)
+copy_input_images(render_path, input_img_dir)
+#generate_masks(render_path, mask_path)
 #draw_bb(render_path, label_path)
