@@ -109,7 +109,7 @@ def copy_input_images(render_path, input_img_dir):
             continue
         folder_num = os.path.basename(folder)
         input_img_path = os.path.join(render_path, str(folder_num), "render_full.png")
-        output_img_path = os.path.join(input_img_dir, str(folder_num) + ".png")
+        output_img_path = os.path.join(input_img_dir, str(folder_num), "input.png")
         if os.path.isfile(input_img_path):
             shutil.copyfile(input_img_path, output_img_path)
         else:
@@ -119,7 +119,7 @@ def copy_input_images(render_path, input_img_dir):
 base_path   = "/media/MX500/CS_BA_Data"
 render_path = os.path.join(base_path, "render_output")
 #label_path = os.path.join(some_path, "labels.txt")
-input_img_dir = os.path.join(base_path, "input_images")
+input_img_dir = os.path.join(base_path, "training")
 sample_path = os.path.join(base_path, "SamplePBR")
 mask_path   = os.path.join(base_path, "masks")
 
