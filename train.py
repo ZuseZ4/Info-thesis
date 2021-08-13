@@ -5,7 +5,6 @@ from tqdm import tqdm
 import torch
 from PIL import Image
 from torch import nn, optim
-#from torch.utils.data.dataset import Dataset
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, transforms, utils
 
@@ -116,6 +115,7 @@ def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loade
         dev = "cuda:0" 
     else:  
         dev = "cpu"
+    dev = "cuda:0"
     device = torch.device(dev)
     
     tr_loss_arr = []
@@ -141,7 +141,7 @@ def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loade
         meanioutest =  checkpoint['MeanIOU test']
         pixelacctest =  checkpoint['PixelAcc test']
         print("loaded model, ", checkpoint['description'], "at epoch", prevEpoch)
-        model.to(device)
+    model.to(device)
     
     for epoch in range(0, n_epochs):
         train_loss = 0.0
@@ -212,7 +212,7 @@ def training_loop(n_epochs, optimizer, lr_scheduler, model, loss_fn, train_loade
         
     return tr_loss_arr, val_loss_arr, meanioutrain, pixelacctrain, meanioutest, pixelacctest
 
-megaDataset = SegDataset('/media/MX500/CS_BA_Data/training')
+megaDataset = SegDataset('/home/zuse/prog/CS_BA_Data/training')
 print(megaDataset)
 #print(len(megaDataset))
 
@@ -222,7 +222,7 @@ def trainTestSplit(dataset, TTR):
     valDataset = torch.utils.data.Subset(dataset, range(int(TTR*len(dataset)), len(dataset)))
     return trainDataset, valDataset
   
-batchSize = 2
+batchSize = 8
 trainDataset, valDataset = trainTestSplit(megaDataset, 0.9)
 print("dataset lengths", len(trainDataset), len(valDataset))
 trainLoader = DataLoader(trainDataset, batch_size = batchSize, shuffle=True, drop_last=True)
