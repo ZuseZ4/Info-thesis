@@ -5,6 +5,7 @@ import sys
 import glob
 import random
 import math
+from mathutils import Vector
 import time
 import queue
 import shutil
@@ -12,19 +13,21 @@ import subprocess
 import numpy as np
 import time
 
-dir = "/media/MX500/CS_BA_Data"
+dir = "/home/zuse/prog/CS_BA_Data"
 if not dir in sys.path:
     sys.path.append(dir)
 print("path: ", sys.path)
 import loadPBR
+import VesselGenerator
 
 # this next part forces a reload in case you edit the source after you first start the blender session
 import imp
 imp.reload(loadPBR)
+imp.reload(VesselGenerator)
 
 # this is optional and allows you to call the functions without specifying the package name
 from loadPBR import *
-
+from VesselGenerator import *
 
 class Obj_loader:
     #bpy.context.scene.render.engine = 'CYCLES' #later
@@ -84,15 +87,18 @@ class Obj_loader:
         return img
     
     def load_obj(self):
-        obj_list = random.choices(self.model_files, k=self.n)
+        num_vessels = np.random.randint(0, self.n)
+        num_objects = self.n - num_vessels
+        obj_list = random.choices(self.model_files, k=num_objects)
         
         col = bpy.data.collections.get(self.collection_name)
         if col == None:
             col = bpy.data.collections.new(self.collection_name) 
             bpy.context.scene.collection.children.link(col)
               
-        while(self.num_loaded_obj < self.n):
-            obj_path = obj_list[self.num_loaded_obj]
+        #while(self.num_loaded_obj < self.n):
+        #    obj_path = obj_list[self.num_loaded_obj]
+        for obj_path in obj_list:
             obj_name = bpy.path.display_name_from_filepath(obj_path)
             bpy.ops.import_scene.obj(filepath=obj_path)
             bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
@@ -103,13 +109,38 @@ class Obj_loader:
                 # Add texture
                 applied_mat_name = self.pbr.apply_random(ob, self.num_loaded_obj)
                 self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
-                #self.annotations[applied_mat_name].append(self.num_loaded_obj)
                 self.annotations[applied_mat_name].append(ob)
                 
                 ob.dimensions = (1,1,1)
                 ob.rotation_euler = [0,0,math.radians(random.randint(0,360))]
                 ob.location = (random.uniform(-5., 5.), random.uniform(-5.,5.), 1)
             self.num_loaded_obj += 1
+        print("vessels: ", num_vessels)
+        for i in range(num_vessels):
+            vessel_name = "Vessel_"+str(i)
+            content_name = "Content_"+str(i)
+            print(vessel_name)
+            
+            # create objects
+            AddVessel(vessel_name,content_name,col,ScaleFactor=np.random.rand()*0.01 + 0.02)
+            vessel = bpy.data.objects.get(vessel_name)
+            content = bpy.data.objects.get(content_name)
+            assert(vessel != None)
+            assert(content != None)
+            
+            # apply textures
+            applied_mat_name = self.pbr.apply_random(vessel, self.num_loaded_obj)
+            self.pbr.apply_mat_to_obj(bpy.data.materials.get("mat-"+str(self.num_loaded_obj)), content)
+            self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
+
+            # move objects to random position
+            self.annotations[applied_mat_name].append(vessel)
+            self.annotations[applied_mat_name].append(content)
+            v = Vector((random.uniform(-5., 5.), random.uniform(-5., 5.), 0))
+            vessel.location += v
+            content.location += v
+            self.num_loaded_obj += 1
+            
         
     def load_background(self):
         bg_path = random.choice(self.background_files)
@@ -345,20 +376,16 @@ class Obj_loader:
                 bpy.data.objects.remove(obj, do_unlink=True)
             f.write("\n")
         f.close()
-        
-
-                
-    def create_labels(self):
-        # I'm too lazy to get PIL/exr running inside of Blender
-        subprocess.run(['python3', '/media/MX500/CS_BA_Data/label.py'])
 
 
 
 
+#CleanScene()
 loader = Obj_loader()
 
 startTime = time.time()
-for i in range(200, 210):
+for i in range(1):
+    loader.clean()
     print("annotations ", loader.annotations)
     loader.set_camera() # only creates one camera (by all means)
     loader.iteration(i)
@@ -366,9 +393,8 @@ for i in range(200, 210):
     loader.load_obj() # creates multiple textures and materials
     loader.load_background() # only creates one bg (per bg image)
     loader.create_or_reuse_compositor()
-    loader.iterate_diff()
-    loader.clean()
-loader.clean()
+    #loader.iterate_diff()
+#loader.clean()
 #loader.create_labels()
 
 

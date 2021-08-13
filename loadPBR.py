@@ -51,19 +51,21 @@ class pbr_loader:
         mat.node_tree.links.new(bsdf.inputs['Roughness'], roughnessImage.outputs['Color'])
 
         
-    def __apply_mat_to_obj(self, mat, obj):
+    def apply_mat_to_obj(self, mat, obj):
         if not obj.data.materials:
             obj.data.materials.append(mat)
         else:
             for i in range(0,len(obj.data.materials.values())):
                 obj.data.materials[i] = mat        
-            
+                
+    
     def apply_random(self, obj, num):
+        pbr_dir = random.choice(self.pbr_dirs)
+        
         material_name = 'mat-' + str(num)
         mat = bpy.data.materials.new(name=material_name)
         mat.use_nodes = True
         
-        pbr_dir = random.choice(self.pbr_dirs)
         #f.write(pbr_dir + " " + str(num) + "\n")
         base_name = os.path.basename(pbr_dir) + "_2K_"
         color_path = os.path.join(pbr_dir, base_name + "Color.jpg")
@@ -75,6 +77,7 @@ class pbr_loader:
         displacement_path = os.path.join(pbr_dir, base_name + "Displacement.jpg")
         self.__add_displacementNode(mat, displacement_path)
         
-        self.__apply_mat_to_obj(mat, obj)
+        self.apply_mat_to_obj(mat, obj)
         
-        return pbr_dir
+        return pbr_dir            
+        
