@@ -30,10 +30,16 @@ from loadPBR import *
 from VesselGenerator import *
 
 class Obj_loader:
-    #bpy.context.scene.render.engine = 'CYCLES' #later
-    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
-    bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
-    bpy.context.scene.render.image_settings.use_zbuffer = True
+    bpy.context.scene.render.engine = 'CYCLES' #later
+    bpy.context.scene.cycles.samples = 64
+    bpy.context.scene.cycles.device = "GPU"
+    bpy.context.scene.cycles.feature_set = "SUPPORTED"
+    bpy.context.scene.render.film_transparent = False
+    
+    #bpy.context.scene.render.film_transparent = True
+    #bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+    #bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+    #bpy.context.scene.render.image_settings.use_zbuffer = True
         
     compositor_exists = False
     n = 10 # will load n random objects
@@ -48,30 +54,26 @@ class Obj_loader:
     
     collection_name = "lab_obj_collection"
     
-    #model_dir = os.path.join(base_dir,'small','models')
     model_dir = os.path.join(base_dir,'large','models')
-    texture_dir = os.path.join(base_dir,'large','textures')
     background_dir = os.path.join(base_dir, 'backgrounds')
-    tex_name = os.path.join(base_dir, 'small','textures',"0ab478614f29657a.jpg")
-    picture_path = os.path.join(base_dir, "cam_out.jpg")
     render_path = os.path.join(base_dir, "render_output")
+    pbr_parent_dir = os.path.join(base_dir, "SamplePBR")
     
-    assert os.path.isfile(tex_name)
-    assert os.path.isdir(texture_dir)
+    assert os.path.isdir(pbr_parent_dir)
     assert os.path.isdir(model_dir)
     assert os.path.isdir(background_dir)
     assert os.path.isdir(render_path)
     
-    pbr_parent_dir = os.path.join(base_dir, "SamplePBR")
-    num_PBR = len(list(os.walk(pbr_parent_dir)))
-    
     # Specify files
-    model_files = glob.glob(model_dir + "/*.obj")
-    texture_files = glob.glob(texture_dir + "/*.jpg")
+    num_PBR = len(list(os.walk(pbr_parent_dir)))
+    model_files = glob.glob(model_dir + "/*.gltf")
     background_files = glob.glob(background_dir + "/*.hdr")
-
     pbr = pbr_loader(base_dir)
-    print(pbr)
+    
+    print("#models: ", len(model_files))
+    print("pbr: ", pbr)
+    
+    
     
     def iteration(self, n):
         self.render_path = os.path.join(self.base_dir, "render_output", str(n))
@@ -87,7 +89,8 @@ class Obj_loader:
         return img
     
     def load_obj(self):
-        num_vessels = np.random.randint(0, self.n)
+        #num_vessels = np.random.randint(0, self.n / 2) # we currently don't use them
+        num_vessels = 0 # don't crash my pc please
         num_objects = self.n - num_vessels
         obj_list = random.choices(self.model_files, k=num_objects)
         
@@ -95,12 +98,10 @@ class Obj_loader:
         if col == None:
             col = bpy.data.collections.new(self.collection_name) 
             bpy.context.scene.collection.children.link(col)
-              
-        #while(self.num_loaded_obj < self.n):
-        #    obj_path = obj_list[self.num_loaded_obj]
+        assert(col != None, "col is None")      
         for obj_path in obj_list:
             obj_name = bpy.path.display_name_from_filepath(obj_path)
-            bpy.ops.import_scene.obj(filepath=obj_path)
+            bpy.ops.import_scene.gltf(filepath=obj_path)
             bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
                 
             for ob in bpy.context.selected_objects:
@@ -110,10 +111,13 @@ class Obj_loader:
                 applied_mat_name = self.pbr.apply_random(ob, self.num_loaded_obj)
                 self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
                 self.annotations[applied_mat_name].append(ob)
-                
-                ob.dimensions = (1,1,1)
-                ob.rotation_euler = [0,0,math.radians(random.randint(0,360))]
-                ob.location = (random.uniform(-5., 5.), random.uniform(-5.,5.), 1)
+            
+                scale = random.uniform(0.7, 2)
+                ob.dimensions = (scale, scale, scale)
+                ob.rotation_mode = "XYZ"
+                ob.rotation_euler = (math.radians(random.randint(0,360)),math.radians(random.randint(0,360)),math.radians(random.randint(0,360)))
+                print(ob.rotation_euler)
+                ob.location = (random.uniform(-5., 5.), random.uniform(-5.,5.), random.uniform(-3.,3.))
             self.num_loaded_obj += 1
         print("vessels: ", num_vessels)
         for i in range(num_vessels):
@@ -122,40 +126,29 @@ class Obj_loader:
             print(vessel_name)
             
             # create objects
-            AddVessel(vessel_name,content_name,col,ScaleFactor=np.random.rand()*0.01 + 0.02)
+            AddVessel(VesselName=vessel_name,ContentName=content_name,Col=col,ScaleFactor=np.random.rand()*0.01 + 0.02)
             vessel = bpy.data.objects.get(vessel_name)
             content = bpy.data.objects.get(content_name)
             assert(vessel != None)
             assert(content != None)
             
             # apply textures
-            applied_mat_name = self.pbr.apply_random(vessel, self.num_loaded_obj)
-            self.pbr.apply_mat_to_obj(bpy.data.materials.get("mat-"+str(self.num_loaded_obj)), content)
-            self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
+            #applied_mat_name = self.pbr.apply_random(vessel, self.num_loaded_obj)
+            #self.pbr.apply_mat_to_obj(bpy.data.materials.get("mat-"+str(self.num_loaded_obj)), content)
+            print(vessel_name)
+            VesselMaterial=AssignMaterialToVessel(vessel_name)
+            #AssignMaterialToVessel(vessel_name)
+            #self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
 
             # move objects to random position
-            self.annotations[applied_mat_name].append(vessel)
-            self.annotations[applied_mat_name].append(content)
+            #self.annotations[applied_mat_name].append(vessel)
+            #self.annotations[applied_mat_name].append(content)
             v = Vector((random.uniform(-5., 5.), random.uniform(-5., 5.), 0))
             vessel.location += v
             content.location += v
             self.num_loaded_obj += 1
             
-        
-    def load_background(self):
-        bg_path = random.choice(self.background_files)
-        
-        cam = bpy.context.scene.camera
-        if cam == None:
-            self.set_camera()
-            cam = bpy.context.scene.camera
             
-        cam.data.show_background_images = True
-        cam.data.background_images.clear()
-        
-        bg = cam.data.background_images.new()
-        bg.image = self.__load_or_reuse(bg_path)
-    
     def load_floor(self):
         cube = bpy.data.objects.get("ground")
         if cube != None:
@@ -167,7 +160,8 @@ class Obj_loader:
         cube.dimensions = (10,10,0.)
 
     def set_camera(self):
-        if bpy.context.scene.camera == None:
+        scene = bpy.context.scene
+        if scene.camera == None:
             print("create new scene camera")
             if bpy.data.cameras.get('Camera') == None:
                 print("creater new camera")
@@ -175,21 +169,63 @@ class Obj_loader:
             else:
                 camera_data = bpy.data.cameras.get('Camera')
             cam = bpy.data.objects.new('Camera', camera_data)
-            bpy.context.scene.camera = cam
-            bpy.context.scene.collection.objects.link(cam)
+            scene.camera = cam
+            scene.collection.objects.link(cam)
         else:
-            cam = bpy.context.scene.camera
+            cam = scene.camera
             
-        if bpy.context.scene.collection.objects.get('Camera') == None:
-            bpy.context.scene.collection.objects.link(cam)
+        if scene.collection.objects.get('Camera') == None:
+            scene.collection.objects.link(cam)
         
         grid_width = self.square_root
         #cam_loc = (grid_width / 2, grid_width / 2, 10)
-        cam_loc = (0,0,30)
-        cam = bpy.context.scene.camera
-        bpy.context.scene.camera = cam
+        cam_loc = (0,0,28)
+        cam = scene.camera
+        scene.camera = cam
         cam.location = cam_loc
         cam.rotation_euler = [0,0,0]
+    ##############################################################################################################################
+
+    #                   Add Camera to scene
+
+    ##############################################################################################################################  
+    def SetCamera(self, name="Camera", lens = 32, location=(0,0,0),rotation=(0, 0, 0),shift_x=0,shift_y=0):
+       
+        #=================Set Camera================================
+       
+        bpy.ops.object.camera_add(enter_editmode=False, align='VIEW', location=location, rotation=rotation)
+        bpy.context.object.name = name    
+        bpy.context.object.data.lens = lens
+
+        bpy.context.scene.camera = bpy.context.object
+        bpy.context.scene.camera.location=location
+        bpy.context.scene.camera.rotation_euler=rotation
+        bpy.context.scene.camera.data.type = 'PERSP'
+        bpy.context.scene.camera.data.shift_x=shift_x
+        bpy.context.scene.camera.data.shift_y=shift_y
+
+    ########################################################################################################
+
+    # Randomly set camera position (so it will look at the vessel)
+
+    #################################################################
+    def RandomlySetCameraPos(self,name,MinDist):
+        print("Randomly set camera position")
+        #MinDist=np.max([VesWidth,VesHeight])
+        R=np.random.rand()*MinDist*4+MinDist*3  # Random radius (set range that give good images)
+        print('R='+str(R)+"  MinDist="+str(MinDist))
+        Ang=(1.0-1.1*np.random.rand()*np.random.rand())*3.14/2  # Random angle
+        x=0
+        y=np.sin(Ang)*R #+np.random.rand()*VesWidth-VesWidth/2
+        z=np.cos(Ang)*R #+VesHeight*np.random.rand()
+        rotx=Ang
+        rotz=3.14159
+        roty=(0.5*np.random.rand()-0.5*np.random.rand())*np.random.rand() # Random roll
+        Focal=50 #(np.random.rand()*5+2)*R/np.max([VesWidth,VesHeight])
+        shift_x=0.2-np.random.rand()*0.4
+        shift_y=0.2-np.random.rand()*0.4
+        self.SetCamera(name="Camera", lens = Focal, location=(x,y,z),rotation=(rotx, roty, rotz),shift_x=shift_x,shift_y=shift_y)
+        
         
     def clean(self):
         if bpy.data.collections.get(self.collection_name) == None:
@@ -207,6 +243,18 @@ class Obj_loader:
         bpy.data.materials.data.orphans_purge() # delte unused materials (they accumulate)
         bpy.data.images.data.orphans_purge()
     
+    def set_background(self):
+        bg_path = random.choice(self.background_files)
+        print("Background: ", bg_path)
+        assert(bg_path != None, "Couldn't find background!")
+        bg_img = self.__load_or_reuse(bg_path)
+        
+        tree_nodes  = bpy.context.scene.world.node_tree.nodes
+        node_environment = tree_nodes.get("Environment Texture") # Add Environment Texture node
+        node_environment.image = bg_img
+        print("background size: ", node_environment.width, node_environment.height)
+        node_environment.location = -300,0
+    
     def create_or_reuse_compositor(self):
         # check if nodes exist, don't create multiples
         if self.compositor_exists:
@@ -216,120 +264,45 @@ class Obj_loader:
         scene = bpy.context.scene
         scene.render.use_compositing = True
         scene.use_nodes = True
-        nodes = bpy.context.scene.node_tree.nodes.values() # from last iteration, remvoe
+        nodes = bpy.context.scene.node_tree.nodes.values() # from last iteration, remove
         for node in nodes:
             bpy.context.scene.node_tree.nodes.remove(node)
             
         renderNode = scene.node_tree.nodes.new('CompositorNodeRLayers')
         compositeNode = scene.node_tree.nodes.new('CompositorNodeComposite')
+
         scene.node_tree.links.new(compositeNode.inputs['Image'], renderNode.outputs['Image'])
         scene.node_tree.links.new(compositeNode.inputs['Z'], renderNode.outputs['Depth'])
-        scene.node_tree.links.new(compositeNode.inputs['Alpha'], renderNode.outputs['Alpha'])
         self.compositor_exists = True
-
-    #def __get_bounding_box(obj):
         
-    def __clamp(self, x, minimum, maximum):
-        return max(minimum, min(x, maximum))
+        node_tree  = bpy.context.scene.world.node_tree
+        tree_nodes = node_tree.nodes
+        tree_nodes.clear() # Clear all nodes
+        node_background = tree_nodes.new(type='ShaderNodeBackground') # Add Background node
+        node_environment = tree_nodes.new('ShaderNodeTexEnvironment') # Add Environment Texture node
+        #node_environment.image = bpy.data.images.load(bg_path) 
+        #node_environment.location = -300,0
+        node_output = tree_nodes.new(type='ShaderNodeOutputWorld') # Add Output node
+        #node_output.location = 200,0
 
-    def __camera_view_bounds_2d(self, me_ob):
-        """
-        Returns camera space bounding box of mesh object.
+        # Link all nodes
+        links = node_tree.links
+        link = links.new(node_environment.outputs["Color"], node_background.inputs["Color"])
+        link = links.new(node_background.outputs["Background"], node_output.inputs["Surface"])
 
-        Negative 'z' value means the point is behind the camera.
-
-        Takes shift-x/y, lens angle and sensor size into account
-        as well as perspective/ortho projections.
-
-        :arg scene: Scene to use for frame size.
-        :type scene: :class:`bpy.types.Scene`
-        :arg obj: Camera object.
-        :type obj: :class:`bpy.types.Object`
-        :arg me: Untransformed Mesh.
-        :type me: :class:`bpy.types.Mesh´
-        :return: a Box object (call its to_tuple() method to get x, y, width and height)
-        :rtype: :class:`Box`
-        """
-        scene = bpy.context.scene
-        cam_ob = scene.camera
-
-        mat = cam_ob.matrix_world.normalized().inverted()
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        mesh_eval = me_ob.evaluated_get(depsgraph)
-        me = mesh_eval.to_mesh()
-        me.transform(me_ob.matrix_world)
-        me.transform(mat)
-
-        camera = cam_ob.data
-        frame = [-v for v in camera.view_frame(scene=scene)[:3]]
-        camera_persp = camera.type != 'ORTHO'
-
-        lx = []
-        ly = []
-
-        for v in me.vertices:
-            co_local = v.co
-            z = -co_local.z
-
-            if camera_persp:
-                if z == 0.0:
-                    lx.append(0.5)
-                    ly.append(0.5)
-                # Does it make any sense to drop these?
-                # if z <= 0.0:
-                #    continue
-                else:
-                    frame = [(v / (v.z / z)) for v in frame]
-
-            min_x, max_x = frame[1].x, frame[2].x
-            min_y, max_y = frame[0].y, frame[1].y
-
-            x = (co_local.x - min_x) / (max_x - min_x)
-            y = (co_local.y - min_y) / (max_y - min_y)
-
-            lx.append(x)
-            ly.append(y)
-
-        min_x = self.__clamp(min(lx), 0.0, 1.0)
-        max_x = self.__clamp(max(lx), 0.0, 1.0)
-        min_y = self.__clamp(min(ly), 0.0, 1.0)
-        max_y = self.__clamp(max(ly), 0.0, 1.0)
-
-        mesh_eval.to_mesh_clear()
-
-        r = scene.render
-        fac = r.resolution_percentage * 0.01
-        dim_x = r.resolution_x * fac
-        dim_y = r.resolution_y * fac
-
-        # Sanity check
-        if round((max_x - min_x) * dim_x) == 0 or round((max_y - min_y) * dim_y) == 0:
-            return (0, 0, 0, 0)
-
-        return (
-            round(min_x * dim_x),            # X
-            round(dim_y - max_y * dim_y),    # Y
-            round((max_x - min_x) * dim_x),  # Width
-            round((max_y - min_y) * dim_y)   # Height
-        )
-
-    # Print the result
-    #print(camera_view_bounds_2d(context.scene, context.scene.camera, context.object))      
         
         
     def iterate_diff(self):
     
         if bpy.data.collections.get(self.collection_name) == None:
+            print("couldn't find ", self.collection_name)
+            sys.exit(1)
             return # we haven't run load_obj() yet
-        col = bpy.data.collections.get(self.collection_name)    
-
+        col = bpy.data.collections.get(self.collection_name)
         
         for f in glob.glob(os.path.join(self.render_path, "*.*")):
-            os.remove(f)
-        f = open(os.path.join(self.render_path, "labels.txt"), "w")
-
-        print("samples: ", bpy.context.scene.eevee.taa_samples)
-        bpy.context.scene.eevee.taa_samples = 16
+            os.remove(f)        
+        
         bpy.context.scene.render.image_settings.file_format = 'PNG'
         bpy.context.scene.render.image_settings.use_zbuffer = False
         bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".png")
@@ -338,8 +311,6 @@ class Obj_loader:
         bpy.context.scene.render.image_settings.use_zbuffer = True
         bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_full" + ".exr")
         bpy.ops.render.render(write_still = True)
-        # the next one could improve perf, but has no effect
-        #bpy.context.scene.eevee.taa_samples = 1 # depth information are exact after the first run
 
         keys = self.annotations.keys()
         positions = queue.Queue()
@@ -347,7 +318,7 @@ class Obj_loader:
             objects = self.annotations[key]
             for obj in objects:
                 positions.put(obj.location.copy())
-                obj.location = (100,100,100)
+                obj.location = (1000,1000,1000)
                 
         # render empty
         #bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
@@ -356,44 +327,49 @@ class Obj_loader:
         #bpy.ops.render.render(write_still = True)
                 
         for i, key in enumerate(keys):
-            f.write(bpy.path.basename(key))
-            objects = self.annotations[key]                
+            objects = self.annotations[key]          
+            num = 0      
             for obj in objects:
-                obj.location = positions.get()
-                bb = self.__camera_view_bounds_2d(obj) # (x,y,width,height)
-                f.write(" " + str(bb[0]) + "," + str(bb[1]) + "," + str(bb[2]) + "," + str(bb[3]))            
+                obj.location = positions.get()   
+
+                bpy.context.scene.render.image_settings.file_format = 'PNG'
+                bpy.context.scene.render.image_settings.use_zbuffer = False
+                bpy.context.scene.render.filepath = os.path.join(self.render_path, key.split("/")[-1] + "_" + str(num) + ".png")
+                bpy.ops.render.render(write_still = True)
+                bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+                bpy.context.scene.render.image_settings.use_zbuffer = True
+                bpy.context.scene.render.filepath = os.path.join(self.render_path, key.split("/")[-1] + "_" + str(num) + ".exr")
+                bpy.context.scene.render.filepath = os.path.join(self.render_path, key.split("/")[-1] + "_" + str(num) + ".exr")
+                bpy.ops.render.render(write_still = True)
+                num += 1
                 
-            #bpy.context.scene.render.image_settings.file_format = 'PNG'
-            #bpy.context.scene.render.image_settings.use_zbuffer = False
-            #bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".png")
-            #bpy.ops.render.render(write_still = True)
-            bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
-            bpy.context.scene.render.image_settings.use_zbuffer = True
-            bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_img_" + str(i) + ".exr")
-            bpy.ops.render.render(write_still = True)
-                    
-            for obj in objects: # simply remove obj instead of hiding them again
+                #for obj in objects: # simply remove obj instead of hiding them again
                 bpy.data.objects.remove(obj, do_unlink=True)
-            f.write("\n")
-        f.close()
+        bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
+        bpy.context.scene.render.image_settings.use_zbuffer = True
+        bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_empty.exr")
+        bpy.ops.render.render(write_still = True)
 
 
-
+        
 
 #CleanScene()
 loader = Obj_loader()
 
 startTime = time.time()
-for i in range(1):
+loader.create_or_reuse_compositor()
+for i in range(0,20):
     loader.clean()
-    print("annotations ", loader.annotations)
-    loader.set_camera() # only creates one camera (by all means)
+    #CleanScene()
+    loader.set_background()
+    #loader.set_camera() # only creates one camera (by all means)
+    loader.RandomlySetCameraPos("Camera", 6)
     loader.iteration(i)
-    loader.load_floor()
+    #loader.load_floor()
     loader.load_obj() # creates multiple textures and materials
-    loader.load_background() # only creates one bg (per bg image)
-    loader.create_or_reuse_compositor()
-    #loader.iterate_diff()
+    loader.iterate_diff()
+loader.clean()
+CleanScene()
 #loader.clean()
 #loader.create_labels()
 
