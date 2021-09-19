@@ -107,13 +107,14 @@ def move_train_data(src,dst, pbr_dir):
             os.rename(mask, mask_dst)
     
 
-base_path   = "/home/zuse/prog/CS_BA_Data"
-render_path = os.path.join(base_path, "render_output")
-sample_path = os.path.join(base_path, "SamplePBR")
-training_path = os.path.join(base_path, "training")
+def main():
+    
+    sample_dir = str(sys.argv[1]) # "/home/zuse/prog/CS_BA_Data/SamplePBR"
+    input_dir  = str(sys.argv[2]) # "/home/zuse/prog/CS_BA_Data/render_output"
+    output_dir = str(sys.argv[3]) # "/home/zuse/prog/CS_BA_Data/training"
 
-#generate_masks(render_path)
-move_train_data(render_path, training_path, sample_path)
+    move_train_data(render_path, training_path, sample_path)
 
 
-
+if __name__ == "__main__":
+    main()

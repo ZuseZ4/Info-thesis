@@ -75,18 +75,20 @@ class pbr_loader:
             #obj.data.materials = [mat]
             for i in range(0,len(obj.data.materials.values())):
                 obj.data.materials[i] = mat        # before
-                
-                
 
-    def apply_random(self, obj, num):
-        pbr_dir = random.choice(self.pbr_dirs)
+    def load_mat_from_folder(self, pbr_dir, num):
+        base_name = os.path.basename(pbr_dir).split("-JPG")[0]
+        material_name = 'mat-' + base_name
         
-        material_name = 'mat-' + str(num)
+        pbr_mat = bpy.data.materials.get(material_name) 
+        if pbr_mat != None: # Did we already create it?
+            print("Reusing material:", material_name)
+            return pbr_mat
         mat = bpy.data.materials.new(name=material_name)
         mat.use_nodes = True
         
         self.__add_scaleNode(mat)
-        base_name = os.path.basename(pbr_dir).split("-JPG")[0] + "_"
+        base_name +=  "_"
         color_path = os.path.join(pbr_dir, base_name + "Color.jpg")
         self.__add_colorNode(mat, color_path)
         normal_path = os.path.join(pbr_dir, base_name + "NormalGL.jpg")
@@ -95,8 +97,14 @@ class pbr_loader:
         self.__add_roughnessNode(mat, roughness_path)
         displacement_path = os.path.join(pbr_dir, base_name + "Displacement.jpg")
         self.__add_displacementNode(mat, displacement_path)
+        return mat
+
+    def apply_random(self, obj, num):
+        pbr_dir = random.choice(self.pbr_dirs)
+        
+        mat = self.load_mat_from_folder(pbr_dir, num)
         
         self.apply_mat_to_obj(mat, obj)
         
-        return pbr_dir            
+        return pbr_dir, mat
         

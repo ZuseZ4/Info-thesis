@@ -1,4 +1,8 @@
 __pycache__/
+financial
+papers
 *.zip
+*.jpg
+*.gltf
 todo.txt
 annotations.txt
