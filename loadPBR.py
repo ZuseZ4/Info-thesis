@@ -6,8 +6,7 @@ import random
 import math
   
 class pbr_loader:
-    def __init__(self, base_dir):
-        pbr_parent_path = os.path.join(base_dir, "SamplePBR")
+    def __init__(self, pbr_parent_path):
         assert os.path.isdir(pbr_parent_path)
         self.pbr_dirs = [f.path for f in os.scandir(pbr_parent_path) if f.is_dir()]
 

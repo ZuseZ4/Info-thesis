@@ -30,7 +30,7 @@ from loadPBR import *
 #from VesselGenerator import *
 
 class Obj_loader:
-    def __init__(self, input_dir, output_dir):    
+    def __init__(self, gltf_dir, pbr_dir, hdri_dir, output_dir):    
         bpy.context.scene.render.engine = 'CYCLES' #later
         bpy.context.scene.cycles.samples = 900
         bpy.context.scene.render.image_settings.color_mode = 'RGB'
@@ -48,28 +48,24 @@ class Obj_loader:
         self.num_loaded_obj = 0
         self.annotations = dict()
 
-        # Model directory
-        self.base_dir = input_dir
-        assert os.path.isdir(self.base_dir)
-        
         self.collection_name = "lab_obj_collection"
         
-        self.model_dir = os.path.join(self.base_dir,'large','models')
-        self.background_dir = os.path.join(self.base_dir, 'backgrounds')
-        self.pbr_parent_dir = os.path.join(self.base_dir, "SamplePBR")
+        self.model_dir = gltf_dir
+        self.background_dir = hdri_dir
+        self.pbr_parent_dir = pbr_dir
         
-        self.render_path = output_dir
+        self.render_base_dir = output_dir 
         
         assert os.path.isdir(self.pbr_parent_dir)
         assert os.path.isdir(self.model_dir)
         assert os.path.isdir(self.background_dir)
-        assert os.path.isdir(self.render_path)
+        assert os.path.isdir(self.render_base_dir)
         
         # Specify files
         self.num_PBR = len(list(os.walk(self.pbr_parent_dir)))
         self.model_files = glob.glob(self.model_dir + "/*.gltf")
         self.background_files = glob.glob(self.background_dir + "/*.hdr")
-        self.pbr = pbr_loader(self.base_dir)
+        self.pbr = pbr_loader(self.pbr_parent_dir)
         
         print("#models: ", len(self.model_files))
         print("pbr: ", self.pbr)
@@ -77,7 +73,7 @@ class Obj_loader:
     
     
     def iteration(self, n):
-        self.render_path = os.path.join(self.base_dir, "render_output", str(n))
+        self.render_path = os.path.join(self.render_base_dir, str(n))
         if not os.path.isdir(self.render_path):
             os.mkdir(self.render_path)
     
@@ -334,18 +330,22 @@ def main():
     # n = int(sys.argv[3])
     # m = int(sys.argv[4])
 
-    input_dir = "/home/zuse/prog/CS_BA_Data"
+
+    gltf_dir   = "/home/zuse/prog/CS_BA_Data/large/models"
+    pbr_dir    = "/home/zuse/prog/CS_BA_Data/SamplePBR"
+    hdri_dir   = "/home/zuse/prog/CS_BA_Data/backgrounds"
     output_dir = "/home/zuse/prog/CS_BA_Data/render_output"
     n = 0
     m = 2 # 1000
 
-    loader = Obj_loader(input_dir, output_dir)
+    loader = Obj_loader(gltf_dir, pbr_dir, hdri_dir, output_dir)
 
     startTime = time.time()
 
     loader.create_or_reuse_compositor()
     for i in range(n,m):
         loader.CleanScene()
+        loader.cleanAll()
         loader.set_background()
         loader.RandomlySetCameraPos("Camera", 6)
         loader.iteration(i)
