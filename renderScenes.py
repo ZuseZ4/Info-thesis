@@ -215,8 +215,7 @@ class Obj_loader:
         assert(bg_path != None, "Couldn't find background!")
         bg_img = self.__load_or_reuse(bg_path)
         
-        tree_nodes  = bpy.context.scene.world.node_tree.nodes
-        node_environment = tree_nodes.get("Environment Texture") # Add Environment Texture node
+        node_environment = bpy.context.scene.world.node_tree.nodes.get("Environment Texture") # Add Environment Texture node
         node_environment.image = bg_img
         print("background size: ", node_environment.width, node_environment.height)
     
@@ -275,6 +274,7 @@ class Obj_loader:
         # Connecting the scene to the renderer such that we render the scene
         # bpy.context.scene.cycles.max_bounces = 12
         # bpy.context.scene.node_tree.links.new(self.compositeNode.inputs['Image'], self.renderNode.outputs['Image'])
+        # bpy.context.scene.render.resolution_percentage = 100
         
         bpy.context.scene.cycles.samples = 900 # for the real image
         bpy.context.scene.render.image_settings.file_format = 'PNG'
@@ -286,6 +286,11 @@ class Obj_loader:
         # Now we hide the scene to speed up the collection of depth informations
         # bpy.context.scene.node_tree.links.new(self.compositeNode.inputs['Image'], self.blackNode.outputs['RGBA'])
         # bpy.context.scene.cycles.max_bounces = 0
+        # bpy.context.scene.render.resolution_percentage = 1
+        
+        # We only need the background image for our primary rgb image, not for collecting depth infos. It's compute heavy, so drop it.
+        node_environment = bpy.context.scene.world.node_tree.nodes.get("Environment Texture")
+        node_environment.image = None
         
         bpy.context.scene.cycles.samples = 1 # We only need depth info for the rest
         bpy.context.scene.render.image_settings.file_format = 'OPEN_EXR'
