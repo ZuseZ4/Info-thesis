@@ -108,7 +108,7 @@ class Obj_loader:
                 self.annotations.setdefault(applied_mat_name, []) # add key only if not inside
                 self.annotations[applied_mat_name].append(ob)
             
-                scale = random.uniform(0.7, 2)
+                scale = random.uniform(0.7, 3)
                 ob.dimensions = (scale, scale, scale)
                 ob.rotation_mode = "XYZ"
                 ob.rotation_euler = (math.radians(random.randint(0,360)),math.radians(random.randint(0,360)),math.radians(random.randint(0,360)))
