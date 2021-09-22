@@ -13,6 +13,7 @@ import subprocess
 import numpy as np
 import time
 
+# dir = "/home/sf3203tr4/hdd/ManuelDataset/"
 dir = "/home/zuse/prog/CS_BA_Data"
 if not dir in sys.path:
     sys.path.append(dir)
@@ -335,11 +336,16 @@ def main():
     # n = int(sys.argv[3])
     # m = int(sys.argv[4])
 
-
-    gltf_dir   = "/home/zuse/prog/CS_BA_Data/large/models"
-    pbr_dir    = "/home/zuse/prog/CS_BA_Data/SamplePBR"
-    hdri_dir   = "/home/zuse/prog/CS_BA_Data/backgrounds"
-    output_dir = "/home/zuse/prog/CS_BA_Data/render_output"
+    if True:
+        gltf_dir   = "/home/zuse/prog/CS_BA_Data/large/models"
+        pbr_dir    = "/home/zuse/prog/CS_BA_Data/SamplePBR"
+        hdri_dir   = "/home/zuse/prog/CS_BA_Data/backgrounds"
+        output_dir = "/home/zuse/prog/CS_BA_Data/render_output"
+    else:
+        gltf_dir   = "/home/sf3203tr4/hdd/VirtualDataSet/Data/ObjectGTLF" 
+        pbr_dir    = "/home/sf3203tr4/hdd/VirtualDataSet/Data/2K_PBR"
+        hdri_dir   = "/home/sf3203tr4/Desktop/Cloud/HDRI_POLYHAVEN/Poly Haven Assets/HDRIs/4k"
+        output_dir = "/home/sf3203tr4/hdd/ManuelDataset/render_output" 
     n = 0
     m = 2 # 1000
 
