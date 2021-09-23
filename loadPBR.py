@@ -73,7 +73,22 @@ class pbr_loader:
         mat.node_tree.links.new(bsdf.inputs['Metallic'], metalImage.outputs['Color'])
         scaleNode = mat.node_tree.nodes.get('Mapping')
         mat.node_tree.links.new(metalImage.inputs['Vector'], scaleNode.outputs['Vector'])
-
+        
+    def __add_albedo_or_ao_Node(self, mat, img_path, is_albedo):
+        texImage = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        texImage.image = self.__load_or_reuse(img_path)
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
+        mixNode = mat.node_tree.nodes.get('Mix')
+        if mixNode == None:
+            mixNode = mat.node_tree.nodes.new("ShaderNodeMixRGB")
+            mixNode.blend_type = "MULTIPLY"
+            mat.node_tree.links.new(bsdf.inputs['Base Color'], mixNode.outputs['Color'])
+        if is_albedo:
+            mat.node_tree.links.new(mixNode.inputs['Color1'], texImage.outputs['Color'])
+        else:
+            mat.node_tree.links.new(mixNode.inputs['Color2'], texImage.outputs['Color'])
+        scaleNode = mat.node_tree.nodes.get('Mapping')
+        mat.node_tree.links.new(texImage.inputs['Vector'], scaleNode.outputs['Vector'])
 
     def __add_scaleNode(self, mat):
         foo = mat.node_tree.nodes.new('ShaderNodeMapping')
@@ -104,13 +119,20 @@ class pbr_loader:
         
         self.__add_scaleNode(mat)
         self.metal = False
+        self.color = False
 
         for Fname in os.listdir(pbr_dir):
             lower_fname = Fname.lower()
             file_path = os.path.join(pbr_dir, Fname)
 
-            if ("color." in lower_fname) or ("ao." in lower_fname):
+            if ("color." in lower_fname):
                 self.__add_colorNode(mat, file_path)
+            elif ("albedo." in lower_fname):
+                if not self.color: # Either color, or albedo+ao. If color is added later it will overwrite this.
+                    self.__add_albedo_or_ao_Node(mat, file_path, is_albedo=True)
+            elif ("ao." in lower_fname) or ("ambientocclusion." in lower_fname):
+                if not self.color: # Either color, or albedo+ao. If color is added later it will overwrite this.
+                    self.__add_albedo_or_ao_Node(mat, file_path, is_albedo=False)
             elif ("roughness." in lower_fname) or ("rough." in lower_fname):
                 self.__add_roughnessNode(mat, file_path)
             elif ("normal." in lower_fname) or ("norm." in lower_fname) or ("normalgl." in lower_fname):

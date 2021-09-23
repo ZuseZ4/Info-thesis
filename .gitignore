@@ -2,6 +2,7 @@ __pycache__/
 financial
 papers
 *.zip
+*.hdr
 *.jpg
 *.gltf
 todo.txt

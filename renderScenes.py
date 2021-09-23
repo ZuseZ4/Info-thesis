@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import numpy as np
 import time
+from pathlib import Path
 
 # dir = "/home/sf3203tr4/hdd/ManuelDataset/"
 dir = "/home/zuse/prog/CS_BA_Data"
@@ -326,7 +327,13 @@ class Obj_loader:
         bpy.context.scene.render.image_settings.use_zbuffer = True
         bpy.context.scene.render.filepath = os.path.join(self.render_path, "render_empty.exr")
         bpy.ops.render.render(write_still = True)
+        Path(os.path.join(self.render_path, "ok.info")).touch(exist_ok=True)
 
+    def alreadyGenerated(self):
+        check_path = os.path.join(self.render_path, "ok.info")
+        if os.path.isfile(check_path):
+            return True
+        return False
 
 
 def main():
@@ -357,9 +364,11 @@ def main():
     for i in range(n,m):
         loader.CleanScene()
         loader.cleanAll()
+        loader.iteration(i)
+        if loader.alreadyGenerated():
+            continue
         loader.set_background()
         loader.RandomlySetCameraPos("Camera", 6)
-        loader.iteration(i)
         loader.load_obj() # creates multiple textures and materials
         loader.iterate_diff()
     loader.CleanScene()
