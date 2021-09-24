@@ -1,6 +1,9 @@
 __pycache__/
 financial
+SamplePBR/*
+nn_savedir/*
 papers
+later
 *.zip
 *.hdr
 *.jpg

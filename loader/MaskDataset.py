@@ -43,8 +43,11 @@ class MaskDataset(Dataset):
         print(self.examples_per_surface)
 
     # Just for debug
-    def get(self):
-        return self.__getitem__(random.randrange(0, self.__len__()))
+    def get(self, i = None):
+        if i == None:
+            return self.__getitem__(random.randrange(0, self.__len__()))
+        else:
+            return self.__getitem__(i)
 
     def __getitem__(self, index):
 
@@ -63,7 +66,7 @@ class MaskDataset(Dataset):
         primary_mask_path = self.paths[primary_class][index]
         sym_mask_path     = self.paths[primary_class][random.randrange(0, self.examples_per_surface[primary_class])]
         diff_mask_path    = self.paths[secondary_class][random.randrange(0, self.examples_per_surface[secondary_class])]
-        print(primary_mask_path + "\n" + sym_mask_path + "\n" + diff_mask_path)
+        # print(primary_mask_path + "\n" + sym_mask_path + "\n" + diff_mask_path)
         
         # Now we have to get the corresponding input images for these masks
         # We remove the image ening and add the ending which our masks will have
@@ -88,13 +91,14 @@ class MaskDataset(Dataset):
         diff_img = Image.open(diff_img_path).convert("RGB")
         #print("mask mode: ", primary_mask.mode, " image mode: ", primary_img.mode) # 1, RGB
 
+        factor = 1.5
         
         preprocess_normalize = transforms.Compose([
-                                    transforms.Resize((384,288), InterpolationMode.BILINEAR),
+                                    transforms.Resize((int(384*factor),int(288*factor)), InterpolationMode.BILINEAR),
                                     transforms.ToTensor(),
                                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
         preprocess           = transforms.Compose([
-                                    transforms.Resize((384,288), InterpolationMode.BILINEAR),
+                                    transforms.Resize((int(384*factor),int(288*factor)), InterpolationMode.BILINEAR),
                                     transforms.ToTensor()])
 
         primary_mask = preprocess(primary_mask)
