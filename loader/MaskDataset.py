@@ -8,10 +8,6 @@ import sys
 import glob
 import random
 
-# expected layout:
-# base_dir/training/img/<num>.png
-# base_dir/training/masks/<surface_name>/<img_num>_<counter_per_img_and_surface_combination>.png
-
 # Core idea:
 # We pick two classes.
 # From the first one we pick two masks (and their linked input images)
@@ -19,7 +15,7 @@ import random
 # Now we have one equal and one different image
 class MaskDataset(Dataset):
     
-    def __init__(self, img_dir, mask_dir, image_ending=".png"):
+    def __init__(self, img_dir, mask_dir, image_ending=".png", get_triples=True):
         self.img_dir = img_dir
         self.masks_dir = mask_dir
         self.mask_subdirs = [f for f in os.scandir(self.masks_dir) if f.is_dir()]
@@ -29,8 +25,10 @@ class MaskDataset(Dataset):
         self.examples_per_surface = [len(path) for path in self.paths]
         self.num_classes = len(self.surface_names)
         self.len = sum(self.examples_per_surface)
+        self.triples = get_triples # return 3 images from two classes insteam of two images and a boolean label
 
         # We might have classes without examples, strip them:
+        # We delete list elements while iterating over it -> safer in reverse mode
         for i in range(self.num_classes-1, -1, -1):
             if self.examples_per_surface[i] == 0:
                 self.paths.pop(i)
@@ -54,8 +52,8 @@ class MaskDataset(Dataset):
         # First we need to get our primary and secondary class
         primary_class = 0
         while index >= self.examples_per_surface[primary_class]:
-            primary_class += 1
             index -= self.examples_per_surface[primary_class]
+            primary_class += 1
         secondary_class = random.randrange(0,self.num_classes-1)
         if secondary_class >= primary_class: # we account for not picking our primary class twice
             secondary_class += 1
@@ -66,7 +64,6 @@ class MaskDataset(Dataset):
         primary_mask_path = self.paths[primary_class][index]
         sym_mask_path     = self.paths[primary_class][random.randrange(0, self.examples_per_surface[primary_class])]
         diff_mask_path    = self.paths[secondary_class][random.randrange(0, self.examples_per_surface[secondary_class])]
-        # print(primary_mask_path + "\n" + sym_mask_path + "\n" + diff_mask_path)
         
         # Now we have to get the corresponding input images for these masks
         # We remove the image ening and add the ending which our masks will have
@@ -85,13 +82,12 @@ class MaskDataset(Dataset):
         sym_mask = Image.open(sym_mask_path)
         diff_mask = Image.open(diff_mask_path)
         
-        # I told Blender to output RGB instead of RGBA, so that's just making sure.
+        # Blender was set to output RGB instead of RGBA, so that's just making sure.
         primary_img = Image.open(primary_img_path).convert("RGB")
         sym_img = Image.open(sym_img_path).convert("RGB")
         diff_img = Image.open(diff_img_path).convert("RGB")
-        #print("mask mode: ", primary_mask.mode, " image mode: ", primary_img.mode) # 1, RGB
 
-        factor = 1.5
+        factor = 1.5 # How much detail do we want?
         
         preprocess_normalize = transforms.Compose([
                                     transforms.Resize((int(384*factor),int(288*factor)), InterpolationMode.BILINEAR),
@@ -108,10 +104,24 @@ class MaskDataset(Dataset):
         primary_img = preprocess_normalize(primary_img)
         sym_img = preprocess_normalize(sym_img)
         diff_img = preprocess_normalize(diff_img)
- 
-        images = (primary_img, sym_img, diff_img)
-        masks = (primary_mask, sym_mask, diff_mask)
-        return images, masks 
+
+        # Yes, we "could" make this more efficient. But it's not relevant.
+        if self.triples:
+            images = (primary_img, sym_img, diff_img)
+            masks = (primary_mask, sym_mask, diff_mask)
+            return images, masks 
+        else:
+            if random.random() > 0.5: # pick similar example
+                label = 0.0
+                images = (primary_img, sym_img)
+                masks  = (primary_mask, sym_mask)
+            else: # pick two images from different classes
+                label = 1.0
+                images = (primary_img, diff_img)
+                masks  = (primary_mask, diff_mask)
+            return images, masks, label
+                
             
     def __len__(self):
         return self.len
+
